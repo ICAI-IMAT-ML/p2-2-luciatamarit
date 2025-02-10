@@ -18,8 +18,8 @@ def minkowski_distance(a, b, p=2):
     Returns:
         float: Minkowski distance between arrays a and b.
     """
+    return np.sum(np.abs(a - b) ** p) ** (1 / p)
 
-    # TODO
 
 
 # k-Nearest Neighbors Model
@@ -51,6 +51,21 @@ class knn:
             p (int, optional): The degree of the Minkowski distance. Defaults to 2.
         """
         # TODO
+        
+        if X_train.shape[0] != y_train.shape[0]:#ponemos shape[0] porque tienen que tener el mismo numero de filas 
+            raise ValueError("Length of X_train and y_train must be equal.")
+    
+        # Check that k and p are positive integers
+        if k <= 0 or p <= 0:
+            raise ValueError("k and p must be positive integers.")
+
+        # If no errors, store the values
+        self.x_train = X_train
+        self.y_train = y_train
+        self.k = k
+        self.p = p
+
+
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -62,7 +77,21 @@ class knn:
         Returns:
             np.ndarray: Predicted class labels.
         """
+        
         # TODO
+        predicted_labels=[]
+        
+        for point in X:
+            distances=self.compute_distances(point)
+            indices=self.get_k_nearest_neighbors(distances)
+            labels=self.y_train[indices]
+            label=self.most_common_label(labels)
+            predicted_labels.append(label)
+        return np.array(predicted_labels)#se devuelve un array con la clase predecida para cada uno de los k neighbours
+
+
+
+
 
     def predict_proba(self, X):
         """
@@ -78,6 +107,34 @@ class knn:
             np.ndarray: Predicted class probabilities.
         """
         # TODO
+        #para cada punto que haya en X, debe de haber un subarray que contenga la probbailidad de que el punto pertenezca a cada calse
+        classes=np.unique(self.y_train)
+        probabilities_all=[]
+        for point in X:
+            # print(f"El punto es {point}")
+            probabilities=[]
+            
+            for clase in classes:
+                count=0
+                #no hay que llamar a la funcion predict porque estamos comaradan cada posibles clse con cada uno de los k vecinos mas cercanos
+                distances=self.compute_distances(point)
+                knn_indices=self.get_k_nearest_neighbors(distances)#estos son los vecinos
+                labels_knn_neighbours=self.y_train[knn_indices]
+                # print(f"estamos en la clase {clase}  y la etiqueta de los vecinos es {labels_knn_neighbours}")
+                for l in labels_knn_neighbours:
+                    # print(l)
+                    if l== clase:
+                        count+=1
+                # probabilities.append(np.array([count/self.k]))
+                probabilities.append(count/self.k)
+            probabilities_all.append(np.array(probabilities))
+        # print(probabilities_all)
+        return np.array(probabilities_all)
+
+        
+
+
+
 
     def compute_distances(self, point: np.ndarray) -> np.ndarray:
         """Compute distance from a point to every point in the training dataset
@@ -89,6 +146,8 @@ class knn:
             np.ndarray: distance from point to each point in the training dataset.
         """
         # TODO
+        distances = np.array([minkowski_distance(point, x) for x in self.x_train])
+        return distances
 
     def get_k_nearest_neighbors(self, distances: np.ndarray) -> np.ndarray:
         """Get the k nearest neighbors indices given the distances matrix from a point.
@@ -103,6 +162,12 @@ class knn:
             You might want to check the np.argsort function.
         """
         # TODO
+        
+        kn_neighbours_index = np.array([np.argsort(distances)[i] for i in range(self.k)])
+        #lo que hacemos es coger los k primeros elementos de la lista np.argsort(distances), que nos indice las posiciones de los k vecinos mas cercanos
+        return kn_neighbours_index
+
+
 
     def most_common_label(self, knn_labels: np.ndarray) -> int:
         """Obtain the most common label from the labels of the k nearest neighbors
@@ -113,6 +178,9 @@ class knn:
         Returns:
             int: most common label
         """
+
+        most_frequent = np.argmax(np.bincount(knn_labels))
+        return most_frequent
         # TODO
 
     def __str__(self):
@@ -219,21 +287,61 @@ def evaluate_classification_metrics(y_true, y_pred, positive_label):
 
     # Confusion Matrix
     # TODO
+    tp=0
+    fp=0
+    fn=0
+    tn=0
+    for indice,valor in enumerate(y_pred_mapped):
+        if valor == positive_label: #si el valor es 1
+            if y_true_mapped[indice]==positive_label:
+                tp+=1
+            else:
+                fp+=1
+        else: #el valor es 0
+            if y_true_mapped[indice]==0:
+                tn+=1
+            else:
+                fn+=1
+    # print([TN,FP, FN,TP])
+    # print(confusion_matrix)
+# [tn, fp, fn, tp]
 
     # Accuracy
     # TODO
+    accuracy = (tp + tn)/(tp + tn + fn + fp)
 
     # Precision
     # TODO
+    try:
+        precision= tp / (tp + fp)
+    except ZeroDivisionError:
+        precision=0
 
     # Recall (Sensitivity)
     # TODO
+    try:
+        tpr = tp/ (tp + fn)
+    except ZeroDivisionError:
+        tpr=0
+    recall=tpr
+
 
     # Specificity
     # TODO
+    try:
+
+        TNR=tn/(tn+fp)
+    except ZeroDivisionError:
+        TNR=0
+    specificity=TNR
+
 
     # F1 Score
     # TODO
+    try:
+        f1=2*(precision*recall)/(precision+recall)
+    except ZeroDivisionError:
+        f1=0
 
     return {
         "Confusion Matrix": [tn, fp, fn, tp],
@@ -270,6 +378,26 @@ def plot_calibration_curve(y_true, y_probs, positive_label, n_bins=10):
 
     """
     # TODO
+    bin_edges = np.linspace(0, 1, n_bins + 1)
+    
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    true_proportions = []
+
+    for i in range(n_bins):
+        # Definir el rango de cada bin
+        bin_start = bin_edges[i]
+        bin_end = bin_edges[i + 1]
+        # print(bin_start,bin_end)
+        probabilidades_en_intervalo = (y_probs >= bin_start) & (y_probs < bin_end)
+        # print(probabilidades_intervalo)
+        y_true_bin = y_true[probabilidades_en_intervalo]
+        #y_true_bin son los valores de y_true para ese intervalo de probbailidaes
+        #ahora lo que tenemos que hacer es calcular la proporcion de valores positivos dentro de ese bin
+        proportion= np.mean(y_true_bin) #la propircon es la mia, el promedio de 0 y 1sque hay en ese intervalor
+        true_proportions.append(proportion)
+
+
     return {"bin_centers": bin_centers, "true_proportions": true_proportions}
 
 
@@ -301,6 +429,8 @@ def plot_probability_histograms(y_true, y_probs, positive_label, n_bins=10):
     """
     # TODO
 
+    y_true_mapped = np.array([1 if label == positive_label else 0 for label in y_true])
+
     return {
         "array_passed_to_histogram_of_positive_class": y_probs[y_true_mapped == 1],
         "array_passed_to_histogram_of_negative_class": y_probs[y_true_mapped == 0],
@@ -329,5 +459,25 @@ def plot_roc_curve(y_true, y_probs, positive_label):
             - "tpr": Array of True Positive Rates for each threshold.
 
     """
+
+
+    thresholds = np.linspace(0, 1, 11)
+    #para cada valor del umbral, hacemos un y_pred que es una lista, con valores 1 si la probabilidad es mayor o igual que el umbral
+    fpr=[]
+    tpr=[]
+
+    for threshold in thresholds:
+        y_pred = (y_probs >= threshold).astype(int)  #convertimos a 0 o 1 según el umbral
+        tp = np.sum((y_pred == 1) & (y_true == positive_label))  # Predicho positivo y es positivo
+        fp = np.sum((y_pred == 1) & (y_true != positive_label))  # Predicho positivo pero es negativo
+        tn= np.sum((y_pred == 0) & (y_true != positive_label))  # Predicho negativo y es negativo
+        fn = np.sum((y_pred == 0) & (y_true == positive_label))  # Predicho negativo pero es positivo
+
+        expected_tpr = tp / (tp + fn) if tp + fn != 0 else 0
+        expected_fpr = fp / (fp + tn) if fp + tn != 0 else 0
+        fpr.append(expected_fpr)
+        tpr.append(expected_tpr)
+
+
     # TODO
     return {"fpr": np.array(fpr), "tpr": np.array(tpr)}
